@@ -4,7 +4,7 @@ import { supabase } from "./lib/supabaseClient";
 
 function App() {
     // =====================================================
-    // STATE
+    // GENERAL STATE
     // =====================================================
 
     const [currentView, setCurrentView] =
@@ -55,6 +55,23 @@ function App() {
 
 
     // =====================================================
+    // FILE UPLOAD / SENTIMENT ANALYSIS STATE
+    // =====================================================
+
+    const [selectedFile, setSelectedFile] =
+        useState(null);
+
+    const [analyzing, setAnalyzing] =
+        useState(false);
+
+    const [analysisResult, setAnalysisResult] =
+        useState(null);
+
+    const [uploadError, setUploadError] =
+        useState("");
+
+
+    // =====================================================
     // LOAD CURRENT SUPABASE USER
     // =====================================================
 
@@ -69,7 +86,7 @@ function App() {
                 throw error;
             }
 
-            // No active Supabase session
+            // No active session
             if (!session) {
                 setUser(null);
                 setCurrentView("login");
@@ -78,7 +95,6 @@ function App() {
 
             const authUser = session.user;
 
-            // Build the user object used by your dashboard
             setUser({
                 id:
                     authUser.user_metadata?.custom_id ||
@@ -89,7 +105,8 @@ function App() {
                     "",
 
                 email:
-                    authUser.email || "",
+                    authUser.email ||
+                    "",
             });
 
             setCurrentView("dashboard");
@@ -115,7 +132,7 @@ function App() {
 
 
     // =====================================================
-    // CHECK SUPABASE SESSION WHEN APP OPENS
+    // SUPABASE AUTH STATE LISTENER
     // =====================================================
 
     useEffect(() => {
@@ -196,10 +213,8 @@ function App() {
             return;
         }
 
-
         const numericId =
             Number(registerId);
-
 
         if (!Number.isInteger(numericId)) {
 
@@ -238,18 +253,13 @@ function App() {
             return;
         }
 
-
         const cleanEmail =
             registerEmail
                 .trim()
                 .toLowerCase();
 
-
-        // Basic email validation
-
         const emailRegex =
             /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 
         if (!emailRegex.test(cleanEmail)) {
 
@@ -274,7 +284,6 @@ function App() {
             return;
         }
 
-
         if (
             registerPassword.length < 6
         ) {
@@ -285,7 +294,6 @@ function App() {
 
             return;
         }
-
 
         if (
             registerPassword !==
@@ -301,7 +309,7 @@ function App() {
 
 
         // =================================================
-        // REGISTER USING SUPABASE AUTH
+        // REGISTER WITH SUPABASE
         // =================================================
 
         try {
@@ -310,12 +318,6 @@ function App() {
 
             setError("");
 
-
-            console.log(
-                "Registering with Supabase Auth..."
-            );
-
-
             const {
                 data,
                 error,
@@ -323,7 +325,8 @@ function App() {
 
                 email: cleanEmail,
 
-                password: registerPassword,
+                password:
+                    registerPassword,
 
                 options: {
 
@@ -338,30 +341,13 @@ function App() {
                 },
             });
 
-
             if (error) {
                 throw error;
             }
 
-
-            console.log(
-                "REGISTER RESPONSE:",
-                data
-            );
-
-
             console.log(
                 "REGISTERED USER:",
                 data.user
-            );
-
-
-            // =================================================
-            // SUCCESS
-            // =================================================
-
-            alert(
-                "Registration successful! Please login."
             );
 
 
@@ -378,19 +364,21 @@ function App() {
             setConfirmPassword("");
 
 
-            // Put email into login form
+            // Put email into login
 
             setLoginEmail(
                 cleanEmail
             );
 
 
-            // Go to login
+            alert(
+                "Registration successful! Please login."
+            );
+
 
             setCurrentView(
                 "login"
             );
-
 
         } catch (error) {
 
@@ -399,19 +387,16 @@ function App() {
                 error
             );
 
-
             setError(
                 error.message ||
                 "Registration failed."
             );
-
 
         } finally {
 
             setLoading(false);
 
         }
-
     };
 
 
@@ -426,10 +411,6 @@ function App() {
         setError("");
 
 
-        // -------------------------------------------------
-        // VALIDATE EMAIL
-        // -------------------------------------------------
-
         if (!loginEmail.trim()) {
 
             setError(
@@ -438,11 +419,6 @@ function App() {
 
             return;
         }
-
-
-        // -------------------------------------------------
-        // VALIDATE PASSWORD
-        // -------------------------------------------------
 
         if (!loginPassword) {
 
@@ -461,7 +437,7 @@ function App() {
 
 
         // =================================================
-        // LOGIN USING SUPABASE AUTH
+        // LOGIN WITH SUPABASE
         // =================================================
 
         try {
@@ -469,12 +445,6 @@ function App() {
             setLoading(true);
 
             setError("");
-
-
-            console.log(
-                "Logging in with Supabase Auth..."
-            );
-
 
             const {
                 data,
@@ -490,31 +460,12 @@ function App() {
                             loginPassword,
                     });
 
-
             if (error) {
                 throw error;
             }
 
-
-            console.log(
-                "LOGIN RESPONSE:",
-                data
-            );
-
-
-            console.log(
-                "LOGGED IN USER:",
-                data.user
-            );
-
-
-            // =================================================
-            // CREATE USER OBJECT FOR DASHBOARD
-            // =================================================
-
             const authUser =
                 data.user;
-
 
             const loggedInUser = {
 
@@ -535,23 +486,15 @@ function App() {
                     "",
             };
 
-
             setUser(
                 loggedInUser
             );
 
-
-            // Clear password
-
             setLoginPassword("");
-
-
-            // Go to dashboard
 
             setCurrentView(
                 "dashboard"
             );
-
 
         } catch (error) {
 
@@ -560,19 +503,190 @@ function App() {
                 error
             );
 
-
             setError(
                 error.message ||
                 "Login failed."
             );
-
 
         } finally {
 
             setLoading(false);
 
         }
+    };
 
+
+    // =====================================================
+    // FILE SELECTION
+    // =====================================================
+
+    const handleFileSelect = (e) => {
+
+        const file =
+            e.target.files?.[0];
+
+        setUploadError("");
+
+        setAnalysisResult(null);
+
+
+        if (!file) {
+
+            setSelectedFile(null);
+
+            return;
+        }
+
+
+        // Only TXT files
+
+        if (
+            !file.name
+                .toLowerCase()
+                .endsWith(".txt")
+        ) {
+
+            setUploadError(
+                "Please upload a .txt file."
+            );
+
+            setSelectedFile(null);
+
+            return;
+        }
+
+
+        // Optional file-size validation
+        // 5 MB maximum
+
+        const maxSize =
+            5 * 1024 * 1024;
+
+        if (file.size > maxSize) {
+
+            setUploadError(
+                "File is too large. Maximum size is 5 MB."
+            );
+
+            setSelectedFile(null);
+
+            return;
+        }
+
+
+        setSelectedFile(file);
+    };
+
+
+    // =====================================================
+    // SEND FILE TO N8N FOR ANALYSIS
+    // =====================================================
+
+    const handleAnalyze = async () => {
+
+        if (!selectedFile) {
+
+            setUploadError(
+                "Please select a .txt file first."
+            );
+
+            return;
+        }
+
+
+        const webhookUrl =
+            import.meta.env
+                .VITE_N8N_WEBHOOK_URL;
+
+
+        if (!webhookUrl) {
+
+            setUploadError(
+                "n8n webhook URL is not configured."
+            );
+
+            return;
+        }
+
+
+        try {
+
+            setAnalyzing(true);
+
+            setUploadError("");
+
+            setAnalysisResult(null);
+
+
+            // Create multipart/form-data
+
+            const formData =
+                new FormData();
+
+
+            formData.append(
+                "file",
+                selectedFile
+            );
+
+
+            // Send file to n8n
+
+            const response =
+                await fetch(
+                    webhookUrl,
+                    {
+                        method: "POST",
+
+                        body: formData,
+                    }
+                );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Analysis request failed with status ${response.status}`
+                );
+            }
+
+
+            // Read n8n response
+
+            const result =
+                await response.json();
+
+
+            console.log(
+                "N8N ANALYSIS RESULT:",
+                result
+            );
+
+
+            setAnalysisResult(
+                result
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "ANALYSIS ERROR:",
+                error
+            );
+
+
+            setUploadError(
+                error.message ||
+                "Unable to analyze the conversation."
+            );
+
+
+        } finally {
+
+            setAnalyzing(false);
+
+        }
     };
 
 
@@ -587,7 +701,6 @@ function App() {
             setLoading(true);
 
             setError("");
-
 
             const {
                 error,
@@ -604,7 +717,15 @@ function App() {
 
             setLoginPassword("");
 
-            setCurrentView("login");
+            setSelectedFile(null);
+
+            setAnalysisResult(null);
+
+            setUploadError("");
+
+            setCurrentView(
+                "login"
+            );
 
 
         } catch (error) {
@@ -614,23 +735,21 @@ function App() {
                 error
             );
 
-
             setError(
                 error.message ||
                 "Logout failed."
             );
 
-
         } finally {
 
             setLoading(false);
-        }
 
+        }
     };
 
 
     // =====================================================
-    // LOADING SCREEN
+    // SESSION LOADING SCREEN
     // =====================================================
 
     if (checkingSession) {
@@ -653,7 +772,6 @@ function App() {
 
                     </div>
 
-
                     <div className="loading">
 
                         Please wait...
@@ -663,7 +781,6 @@ function App() {
                 </div>
 
             </div>
-
         );
     }
 
@@ -711,10 +828,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="login-email">
-
+                            <label
+                                htmlFor="login-email"
+                            >
                                 Email
-
                             </label>
 
                             <input
@@ -750,10 +867,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="login-password">
-
+                            <label
+                                htmlFor="login-password"
+                            >
                                 Password
-
                             </label>
 
                             <input
@@ -798,7 +915,7 @@ function App() {
                         )}
 
 
-                        {/* LOGIN BUTTON */}
+                        {/* LOGIN */}
 
                         <button
                             type="submit"
@@ -809,19 +926,14 @@ function App() {
                         >
 
                             {loading
-
                                 ? "Logging in..."
-
                                 : "Login"
-
                             }
 
                         </button>
 
                     </form>
 
-
-                    {/* REGISTER LINK */}
 
                     <div className="switch-text">
 
@@ -854,7 +966,6 @@ function App() {
                 </div>
 
             </div>
-
         );
     }
 
@@ -902,10 +1013,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="register-id">
-
+                            <label
+                                htmlFor="register-id"
+                            >
                                 ID
-
                             </label>
 
                             <input
@@ -941,10 +1052,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="register-name">
-
+                            <label
+                                htmlFor="register-name"
+                            >
                                 Name
-
                             </label>
 
                             <input
@@ -980,10 +1091,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="register-email">
-
+                            <label
+                                htmlFor="register-email"
+                            >
                                 Email
-
                             </label>
 
                             <input
@@ -1019,10 +1130,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="register-password">
-
+                            <label
+                                htmlFor="register-password"
+                            >
                                 Password
-
                             </label>
 
                             <input
@@ -1060,10 +1171,10 @@ function App() {
 
                         <div className="input-group">
 
-                            <label htmlFor="confirm-password">
-
+                            <label
+                                htmlFor="confirm-password"
+                            >
                                 Confirm Password
-
                             </label>
 
                             <input
@@ -1108,7 +1219,7 @@ function App() {
                         )}
 
 
-                        {/* REGISTER BUTTON */}
+                        {/* REGISTER */}
 
                         <button
                             type="submit"
@@ -1119,19 +1230,14 @@ function App() {
                         >
 
                             {loading
-
                                 ? "Creating account..."
-
                                 : "Register"
-
                             }
 
                         </button>
 
                     </form>
 
-
-                    {/* LOGIN LINK */}
 
                     <div className="switch-text">
 
@@ -1164,7 +1270,6 @@ function App() {
                 </div>
 
             </div>
-
         );
     }
 
@@ -1178,6 +1283,10 @@ function App() {
         <div className="app">
 
             <div className="dashboard">
+
+                {/* =========================================
+                    DASHBOARD HEADER
+                ========================================= */}
 
                 <div className="dashboard-header">
 
@@ -1218,7 +1327,9 @@ function App() {
                 </div>
 
 
-                {/* PROFILE */}
+                {/* =========================================
+                    PROFILE
+                ========================================= */}
 
                 <div className="profile-card">
 
@@ -1267,12 +1378,505 @@ function App() {
 
                 </div>
 
+
+                {/* =========================================
+                    SENTIMENT ANALYSIS UPLOAD
+                ========================================= */}
+
+                <div className="profile-card">
+
+                    <h2>
+                        Analyze Conversation
+                    </h2>
+
+                    <p>
+                        Upload a conversation in
+                        {" "}
+                        <strong>.txt</strong>
+                        {" "}
+                        format for sentiment analysis.
+                    </p>
+
+
+                    {/* FILE INPUT */}
+
+                    <div className="input-group">
+
+                        <label
+                            htmlFor="conversation-file"
+                        >
+                            Conversation File
+                        </label>
+
+                        <input
+                            id="conversation-file"
+
+                            type="file"
+
+                            accept=".txt,text/plain"
+
+                            onChange={
+                                handleFileSelect
+                            }
+
+                        />
+
+                    </div>
+
+
+                    {/* SELECTED FILE */}
+
+                    {selectedFile && (
+
+                        <div
+                            style={{
+                                marginTop: "10px",
+                                marginBottom: "10px",
+                            }}
+                        >
+
+                            Selected file:
+
+                            {" "}
+
+                            <strong>
+                                {selectedFile.name}
+                            </strong>
+
+                            {" "}
+
+                            (
+                            {(
+                                selectedFile.size /
+                                1024
+                            ).toFixed(1)}
+                            {" "}
+                            KB
+                            )
+
+                        </div>
+
+                    )}
+
+
+                    {/* UPLOAD ERROR */}
+
+                    {uploadError && (
+
+                        <div className="error">
+
+                            {uploadError}
+
+                        </div>
+
+                    )}
+
+
+                    {/* ANALYZE BUTTON */}
+
+                    <button
+                        type="button"
+
+                        onClick={
+                            handleAnalyze
+                        }
+
+                        disabled={
+                            !selectedFile ||
+                            analyzing
+                        }
+                    >
+
+                        {analyzing
+                            ? "Analyzing..."
+                            : "Analyze Conversation"
+                        }
+
+                    </button>
+
+
+                    {/* =====================================
+                        ANALYSIS RESULT
+                    ===================================== */}
+
+                    {analysisResult && (
+
+                        <div
+                            style={{
+                                marginTop: "30px",
+                            }}
+                        >
+
+                            <h2>
+                                Analysis Result
+                            </h2>
+
+
+                            {/* OVERALL SENTIMENT */}
+
+                            {analysisResult.overall_sentiment && (
+
+                                <div className="profile-row">
+
+                                    <strong>
+                                        Overall Sentiment
+                                    </strong>
+
+                                    <span>
+                                        {
+                                            analysisResult
+                                                .overall_sentiment
+                                        }
+                                    </span>
+
+                                </div>
+
+                            )}
+
+
+                            {/* SCORE */}
+
+                            {analysisResult.overall_score !==
+                                undefined && (
+
+                                <div className="profile-row">
+
+                                    <strong>
+                                        Sentiment Score
+                                    </strong>
+
+                                    <span>
+
+                                        {
+                                            typeof analysisResult
+                                                .overall_score ===
+                                            "number"
+
+                                                ? `${(
+                                                    analysisResult
+                                                        .overall_score *
+                                                    100
+                                                ).toFixed(1)}%`
+
+                                                : analysisResult
+                                                    .overall_score
+                                        }
+
+                                    </span>
+
+                                </div>
+
+                            )}
+
+
+                            {/* SUMMARY */}
+
+                            {analysisResult.summary && (
+
+                                <div
+                                    style={{
+                                        marginTop: "20px",
+                                    }}
+                                >
+
+                                    <h3>
+                                        Summary
+                                    </h3>
+
+                                    <p>
+                                        {
+                                            analysisResult.summary
+                                        }
+                                    </p>
+
+                                </div>
+
+                            )}
+
+
+                            {/* EMOTIONS */}
+
+                            {analysisResult.emotions && (
+
+                                <div
+                                    style={{
+                                        marginTop: "20px",
+                                    }}
+                                >
+
+                                    <h3>
+                                        Emotions
+                                    </h3>
+
+                                    {Object.entries(
+                                        analysisResult.emotions
+                                    ).map(
+                                        (
+                                            [
+                                                emotion,
+                                                score,
+                                            ]
+                                        ) => (
+
+                                            <div
+                                                className="profile-row"
+                                                key={emotion}
+                                            >
+
+                                                <strong>
+                                                    {emotion}
+                                                </strong>
+
+                                                <span>
+
+                                                    {
+                                                        typeof score ===
+                                                        "number"
+
+                                                            ? `${(
+                                                                score *
+                                                                100
+                                                            ).toFixed(1)}%`
+
+                                                            : score
+                                                    }
+
+                                                </span>
+
+                                            </div>
+
+                                        )
+                                    )}
+
+                                </div>
+
+                            )}
+
+
+                            {/* SENTENCE LEVEL */}
+
+                            {Array.isArray(
+                                analysisResult.sentences
+                            ) && (
+
+                                <div
+                                    style={{
+                                        marginTop: "20px",
+                                    }}
+                                >
+
+                                    <h3>
+                                        Sentence-Level Sentiment
+                                    </h3>
+
+
+                                    {analysisResult
+                                        .sentences
+                                        .map(
+                                            (
+                                                item,
+                                                index
+                                            ) => (
+
+                                                <div
+                                                    key={
+                                                        index
+                                                    }
+
+                                                    style={{
+                                                        padding:
+                                                            "10px",
+                                                        marginBottom:
+                                                            "8px",
+                                                        border:
+                                                            "1px solid #ddd",
+                                                        borderRadius:
+                                                            "6px",
+                                                    }}
+                                                >
+
+                                                    <p>
+
+                                                        <strong>
+                                                            Sentence{" "}
+                                                            {index +
+                                                                1}
+                                                            :
+                                                        </strong>
+
+                                                        {" "}
+
+                                                        {
+                                                            item.sentence ||
+                                                            item.text
+                                                        }
+
+                                                    </p>
+
+
+                                                    <p>
+
+                                                        <strong>
+                                                            Sentiment:
+                                                        </strong>
+
+                                                        {" "}
+
+                                                        {
+                                                            item.sentiment
+                                                        }
+
+
+                                                        {item.score !==
+                                                            undefined && (
+
+                                                            <>
+
+                                                                {" "}
+
+                                                                (
+                                                                {
+                                                                    typeof item.score ===
+                                                                    "number"
+
+                                                                        ? `${(
+                                                                            item.score *
+                                                                            100
+                                                                        ).toFixed(
+                                                                            1
+                                                                        )}%`
+
+                                                                        : item.score
+                                                                }
+                                                                )
+
+                                                            </>
+
+                                                        )}
+
+                                                    </p>
+
+                                                </div>
+
+                                            )
+                                        )}
+
+                                </div>
+
+                            )}
+
+
+                            {/* KPIs */}
+
+                            {analysisResult.kpis && (
+
+                                <div
+                                    style={{
+                                        marginTop: "20px",
+                                    }}
+                                >
+
+                                    <h3>
+                                        Conversation KPIs
+                                    </h3>
+
+
+                                    {Object.entries(
+                                        analysisResult.kpis
+                                    ).map(
+                                        (
+                                            [
+                                                kpi,
+                                                value,
+                                            ]
+                                        ) => (
+
+                                            <div
+                                                className="profile-row"
+                                                key={kpi}
+                                            >
+
+                                                <strong>
+                                                    {kpi}
+                                                </strong>
+
+                                                <span>
+
+                                                    {
+                                                        typeof value ===
+                                                        "number"
+
+                                                            ? `${(
+                                                                value *
+                                                                100
+                                                            ).toFixed(1)}%`
+
+                                                            : String(
+                                                                value
+                                                            )
+                                                    }
+
+                                                </span>
+
+                                            </div>
+
+                                        )
+                                    )}
+
+                                </div>
+
+                            )}
+
+
+                            {/* RAW RESULT */}
+
+                            <details
+                                style={{
+                                    marginTop: "20px",
+                                }}
+                            >
+
+                                <summary>
+                                    View raw analysis response
+                                </summary>
+
+                                <pre
+                                    style={{
+                                        whiteSpace:
+                                            "pre-wrap",
+                                        wordBreak:
+                                            "break-word",
+                                        marginTop:
+                                            "10px",
+                                        padding:
+                                            "15px",
+                                        background:
+                                            "#f5f5f5",
+                                        borderRadius:
+                                            "6px",
+                                        overflowX:
+                                            "auto",
+                                    }}
+                                >
+                                    {JSON.stringify(
+                                        analysisResult,
+                                        null,
+                                        2
+                                    )}
+                                </pre>
+
+                            </details>
+
+                        </div>
+
+                    )}
+
+                </div>
+
             </div>
 
         </div>
-
     );
-
 }
 
 export default App;
