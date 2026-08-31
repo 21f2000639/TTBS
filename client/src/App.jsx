@@ -304,47 +304,63 @@ function App() {
     const handleFileSelect = (e) => {
         const file = e.target.files?.[0];
 
+        console.log("========== MOBILE FILE TEST ==========");
+        console.log("Event:", e);
+        console.log("Files:", e.target.files);
+        console.log("File:", file);
+
+        if (!file) {
+            console.log("NO FILE RECEIVED");
+
+            setSelectedFile(null);
+            setUploadError("No file was selected.");
+            return;
+        }
+
+        console.log("FILE NAME:", file.name);
+        console.log("FILE TYPE:", file.type);
+        console.log("FILE SIZE:", file.size);
+
+        // Reset previous analysis
         setUploadError("");
         setAnalysisResult(null);
         setIssueStatus("");
 
-        if (!file) {
-            setSelectedFile(null);
-            return;
-        }
+        // Extension check
+        if (!file.name.toLowerCase().endsWith(".txt")) {
+            console.log("REJECTED: Not TXT");
 
-        if (
-            !file.name
-                .toLowerCase()
-                .endsWith(".txt")
-        ) {
             setUploadError(
                 "Please upload a .txt file."
             );
 
             setSelectedFile(null);
+            e.target.value = "";
+
             return;
         }
 
+        // Size check
         const maxSize = 5 * 1024 * 1024;
 
         if (file.size > maxSize) {
+            console.log("REJECTED: File too large");
+
             setUploadError(
                 "File is too large. Maximum size is 5 MB."
             );
 
             setSelectedFile(null);
+            e.target.value = "";
+
             return;
         }
 
-        console.log(
-            "SELECTED FILE:",
-            file.name
-        );
+        console.log("✅ FILE ACCEPTED");
+        console.log("Setting selected file:", file.name);
 
         setSelectedFile(file);
     };
-
     // =====================================================
     // NORMALIZE N8N RESULT
     // =====================================================
