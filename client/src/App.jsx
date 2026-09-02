@@ -304,63 +304,47 @@ function App() {
     const handleFileSelect = (e) => {
         const file = e.target.files?.[0];
 
-        console.log("========== MOBILE FILE TEST ==========");
-        console.log("Event:", e);
-        console.log("Files:", e.target.files);
-        console.log("File:", file);
-
-        if (!file) {
-            console.log("NO FILE RECEIVED");
-
-            setSelectedFile(null);
-            setUploadError("No file was selected.");
-            return;
-        }
-
-        console.log("FILE NAME:", file.name);
-        console.log("FILE TYPE:", file.type);
-        console.log("FILE SIZE:", file.size);
-
-        // Reset previous analysis
         setUploadError("");
         setAnalysisResult(null);
         setIssueStatus("");
 
-        // Extension check
-        if (!file.name.toLowerCase().endsWith(".txt")) {
-            console.log("REJECTED: Not TXT");
+        if (!file) {
+            setSelectedFile(null);
+            return;
+        }
 
+        if (
+            !file.name
+                .toLowerCase()
+                .endsWith(".txt")
+        ) {
             setUploadError(
                 "Please upload a .txt file."
             );
 
             setSelectedFile(null);
-            e.target.value = "";
-
             return;
         }
 
-        // Size check
         const maxSize = 5 * 1024 * 1024;
 
         if (file.size > maxSize) {
-            console.log("REJECTED: File too large");
-
             setUploadError(
                 "File is too large. Maximum size is 5 MB."
             );
 
             setSelectedFile(null);
-            e.target.value = "";
-
             return;
         }
 
-        console.log("✅ FILE ACCEPTED");
-        console.log("Setting selected file:", file.name);
+        console.log(
+            "SELECTED FILE:",
+            file.name
+        );
 
         setSelectedFile(file);
     };
+
     // =====================================================
     // NORMALIZE N8N RESULT
     // =====================================================
@@ -832,6 +816,189 @@ function App() {
             );
 
             setAnalysisResult(finalResult);
+
+            // =================================================
+            // SAVE ANALYSIS TO SUPABASE
+            // =================================================
+            // Use the real Supabase Auth UUID here.
+            // Do NOT use user.id from application state because
+            // that value may contain your custom registration ID.
+
+            const {
+                data: { user: authUser },
+                error: authError,
+            } = await supabase.auth.getUser();
+
+            if (authError) {
+                throw authError;
+            }
+
+            if (!authUser) {
+                throw new Error(
+                    "You must be logged in to save this analysis."
+                );
+            }
+
+            // Read the uploaded conversation text so it can be
+            // stored with the analysis.
+            const conversationText =
+                await selectedFile.text();
+
+            // -------------------------------------------------
+            // 1. SAVE CONVERSATION
+            // -------------------------------------------------
+
+            const {
+                data: conversation,
+                error: conversationError,
+            } = await supabase
+                .from("conversations")
+                .insert({
+                    user_id: authUser.id,
+                    file_name: selectedFile.name,
+                    conversation_text: conversationText,
+                })
+                .select("id")
+                .single();
+
+            if (conversationError) {
+                console.error(
+                    "CONVERSATION SAVE ERROR:",
+                    conversationError
+                );
+                throw conversationError;
+            }
+
+            // -------------------------------------------------
+            // 2. SAVE SENTIMENT ANALYSIS
+            // -------------------------------------------------
+
+            const resultKpis =
+                finalResult.kpis || {};
+
+            const {
+                error: sentimentError,
+            } = await supabase
+                .from("sentiment_analysis")
+                .insert({
+                    conversation_id: conversation.id,
+                    user_id: authUser.id,
+                    overall_sentiment:
+                        finalResult.overall_sentiment ||
+                        null,
+                    overall_score:
+                        finalResult.overall_score ?? null,
+                    customer_satisfaction:
+                        resultKpis.customer_satisfaction ??
+                        null,
+                    customer_frustration:
+                        resultKpis.customer_frustration ??
+                        null,
+                    escalation_risk:
+                        resultKpis.escalation_risk ?? null,
+                    resolution_likelihood:
+                        resultKpis.resolution_likelihood ??
+                        null,
+                    sentence_analysis:
+                        Array.isArray(finalResult.sentences)
+                            ? finalResult.sentences
+                            : [],
+                });
+
+            if (sentimentError) {
+                console.error(
+                    "SENTIMENT SAVE ERROR:",
+                    sentimentError
+                );
+                throw sentimentError;
+            }
+
+            // -------------------------------------------------
+            // 3. SAVE ISSUE + AI RESOLUTION
+            // -------------------------------------------------
+
+            const resultClassification =
+                finalResult.call_classification || {};
+
+            const resultResolution =
+                finalResult.resolution || {};
+
+            const suggestedSteps =
+                Array.isArray(resultResolution.suggested_steps)
+                    ? resultResolution.suggested_steps
+                    : Array.isArray(
+                          resultClassification.suggested_steps
+                      )
+                    ? resultClassification.suggested_steps
+                    : [];
+
+            const {
+                error: issueError,
+            } = await supabase
+                .from("issue_analysis")
+                .insert({
+                    conversation_id: conversation.id,
+                    user_id: authUser.id,
+                    primary_category:
+                        resultClassification.primary_category ||
+                        null,
+                    subcategory:
+                        resultClassification.subcategory ||
+                        null,
+                    primary_issue:
+                        resultClassification.primary_issue ||
+                        null,
+                    issue_summary:
+                        resultClassification.issue_summary ||
+                        null,
+                    secondary_topics:
+                        Array.isArray(
+                            resultClassification.other_issues
+                        )
+                            ? resultClassification.other_issues
+                            : Array.isArray(
+                                  resultClassification.secondary_topics
+                              )
+                            ? resultClassification.secondary_topics
+                            : [],
+                    issue_status:
+                        resultClassification.status ||
+                        null,
+                    status_reason:
+                        resultClassification.status_reason ||
+                        null,
+                    ai_resolution:
+                        resultResolution.summary ||
+                        resultClassification.resolution ||
+                        null,
+                    ai_resolution_steps:
+                        suggestedSteps,
+                    key_moments:
+                        Array.isArray(finalResult.key_moments)
+                            ? finalResult.key_moments
+                            : [],
+                    ai_summary:
+                        finalResult.ai_summary || null,
+                });
+
+            if (issueError) {
+                console.error(
+                    "ISSUE SAVE ERROR:",
+                    issueError
+                );
+                throw issueError;
+            }
+
+            console.log(
+                "================================================="
+            );
+            console.log(
+                "✅ ANALYSIS SAVED TO SUPABASE",
+                conversation.id
+            );
+            console.log(
+                "================================================="
+            );
 
             // Automatically take the user
             // to the Sentiment Analysis page
